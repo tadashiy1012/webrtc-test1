@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>produce</title>
+    <script src="./uuid_v1.js"></script>
+</head>
+<body>
+    <h1>produce</h1>
+    <div>
+        <video id="local" width="400" height="300" autoplay="1"></video>
+    </div>
+    <ul id="list"></ul>
+    <script>
+        const uuid = uuidv1();
+        const local = document.getElementById('local');
+        const list = document.getElementById('list');
+        class MyConn {
+            constructor() {
+                this.isWsOpen = false;
+                this.conn = new RTCPeerConnection();
+                this.conn.onnegotiationneeded = this.onNegotiationneeded();
+                this.conn.onicecandidate = this.onIcecandidate();
+                this.conn.onicecandidateerror = this.onError();
+                this.ws = new WebSocket(location.origin.replace('http', 'ws') + '/signal');
+                this.ws.onopen = this.wsOnOpen();
+                this.ws.onclose = this.wsOnClose();
+                this.ws.onmessage = this.wsOnMessage();
+                this.ws.onerror = this.onError();
+                this.consumers = [];
+                (async () => {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({
+                            video: true, audio: false
+                        });
+                        local.srcObject = stream;
+                        stream.getTracks().forEach(track => this.conn.addTrack(track, stream));
+                    } catch (error) {
+                        console.error(error);
+                    }
+                })();
+            }
+            onNegotiationneeded() {
+                return async (ev) => {
+                    console.log(ev);
+                };
+            }
+            onIcecandidate() {
+                return (ev) => {
+                    console.log(ev);
+                    if (ev.candidate === null) {
+                        if (this.isWsOpen && this.conn.remoteDescription !== null) {
+                            const type = 'produce';
+                            const sdp = this.conn.localDescription.sdp;
+                            const json = { uuid, type, sdp };
+                            this.sendWs(JSON.stringify(json));
+                        }
+                    }
+                };
+            }
+            wsOnOpen() {
+                return (ev) => {
+                    console.log(ev);
+                    this.isWsOpen = true;
+                };
+            }
+            wsOnClose() {
+                return (ev) => {
+                    console.log(ev);
+                };
+            }
+            wsOnMessage() {
+                return (ev) => {
+                    console.log('onMessage');
+                    console.log(ev);
+                    const json = JSON.parse(ev.data);
+                    console.log(json);
+                    if (json.type !== 'consume') return;
+                    this.consumers.push(json);
+                    list.innerHTML = '';
+                    this.consumers.forEach(e => {
+                        const li = document.createElement('li');
+                        li.innerHTML = e.uuid;
+                        li.onclick = this.onClickListElm(e.sdp);
+                        list.appendChild(li);
+                    });
+                };
+            }
+            onError(callback = () => {}) {
+                return (e) => {
+                    console.error(e);
+                    callback();
+                };
+            }
+            onClickListElm(sdp) {
+                return async (ev) => {
+                    console.log(ev);
+                    const offer = new RTCSessionDescription({
+                        type: 'offer', sdp
+                    });
+                    try {
+                        await this.setRemoteDesc(offer);
+                        await this.setLocalDesc(await this.createAnswer());
+                    } catch (error) {
+                        console.error(error);
+                    }
+                };
+            }
+            async createOffer() {
+                return await this.conn.createOffer();
+            }
+            async createAnswer() {
+                return await this.conn.createAnswer();
+            }
+            async setLocalDesc(desc) {
+                await this.conn.setLocalDescription(desc);
+                console.log(this.conn.localDescription);
+            }
+            async setRemoteDesc(desc) {
+                await this.conn.setRemoteDescription(desc);
+                console.log(this.conn.remoteDescription);
+            }
+            sendWs(message) {
+                console.log('send');
+                this.ws.send(message);
+            }
+        }
+        const conn = new MyConn();
+        console.log(conn);
+    </script>
+</body>
+</html>
