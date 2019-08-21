@@ -22,7 +22,7 @@
                 this.conn.onnegotiationneeded = this.onNegotiationneeded();
                 this.conn.onicecandidate = this.onIcecandidate();
                 this.conn.ontrack = this.onTrack();
-                this.ws = new WebSocket(location.origin.replace('http', 'ws') + '/signal');
+                this.ws = new WebSocket('wss://tyws001.herokuapp.com/');
                 this.ws.onopen = this.wsOnOpen();
                 this.ws.onclose = this.wsOnClose();
                 this.ws.onmessage = this.wsOnMessage();
